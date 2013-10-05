@@ -24,14 +24,14 @@ loop(State) ->
             loop(State);
         {getmsgid, PID} ->
             NewState = inc_message_id(State),
-            io:format("Send id " ++ NewState#state.current_msg_id),
+            io:format("Send id ~b", [NewState#state.current_msg_id]),
             PID ! {nid, NewState#state.current_msg_id},
             loop(NewState);
         {dropmessage, {Nachricht, Number}} ->
             NewState = put_message(Number, Nachricht, State),
             io:format("Got Message " ++ Nachricht),
             loop(NewState)
-            
+
     end.
 
 inc_message_id(State) ->
