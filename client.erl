@@ -3,15 +3,21 @@
 
 -import(werkzeug, [logging/2]).
 
--define(MESSAGE_INTERVAL, 3).
+-define(MESSAGE_INTERVAL, 300).
 
 start(Server) ->
-  spawn(fun() -> editor(Server, 5) end).
+  lists:foreach(fun(I) ->
+    spawn(fun() ->
+      editor(Server, 5 + I)
+    end),
+    timer:sleep(I * 1000)
+
+  end, lists:seq(0, 4)).
 
 editor(Server, Lives) ->
   Server ! {getmsgid, self()},
   receive
-    { nid, MessageId } ->
+    {nid, MessageId} ->
       log("~p Received MessageId ~b", [self(), MessageId]),
       timer:sleep(?MESSAGE_INTERVAL),
       Server ! {dropmessage, {"My fancy Message", MessageId}}
