@@ -1,0 +1,7 @@
+#!/usr/bin/env escript
+
+-compile(server).
+-compile(client).
+
+main(_) ->
+  S = server:start(), client:start(S), io:fread("", "~c").

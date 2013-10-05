@@ -1,0 +1,4 @@
+#!/bin/sh
+
+erlc werkzeug.erl server.erl client.erl
+./bin/main
