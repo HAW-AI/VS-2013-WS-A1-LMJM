@@ -1,0 +1,10 @@
+#!/usr/bin/env escript
+-module(main).
+-compile(werkzeug).
+-compile(server).
+-compile(client).
+
+-export([main/1]).
+
+main(_) ->
+  S = server:start(), client:start(S), io:fread("Prompt> ", "~c").

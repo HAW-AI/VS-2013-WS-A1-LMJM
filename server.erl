@@ -19,7 +19,7 @@ loop(State) ->
     receive
         {getmessages, PID} ->
             %{reply,Number,Nachricht,Terminated}
-            {Number, Nachricht} = get_last_element(State#state.hold_back_queue),
+            {Number, Nachricht} = lists:last(State#state.hold_back_queue),
             PID ! {reply, Number, Nachricht, false},
             loop(State);
         {getmsgid, PID} ->
@@ -35,11 +35,7 @@ loop(State) ->
     end.
 
 inc_message_id(State) ->
-    #state{ current_msg_id= State#state.current_msg_id + 1}.
+    State#state{ current_msg_id= State#state.current_msg_id + 1}.
 
 put_message(Number, Message, State) ->
-    #state{hold_back_queue = State#state.hold_back_queue ++ {Number, Message}}.
-
-get_last_element([]) -> [];
-get_last_element([Head | []]) -> Head;
-get_last_element([_|Tail]) -> get_last_element(Tail).
+    State#state{hold_back_queue = State#state.hold_back_queue ++ [{Number, Message}]}.

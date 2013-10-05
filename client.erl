@@ -10,9 +10,23 @@ start(Server) ->
 
 editor(Server, Lives) ->
   Server ! { getmsgid, self() },
-  receive { nid, MessageId } ->
-    timer:sleep(?MESSAGE_INTERVAL),
-    Server ! { "My fancy Message", MessageId }
+  receive
+    { nid, MessageId } ->
+      log("~p Received MessageId ~b", [self(), MessageId]),
+      timer:sleep(?MESSAGE_INTERVAL),
+      Server ! { "My fancy Message", MessageId }
   end,
 
-  editor(Server, Lives - 1).
+  %Server ! { getmessages, self() },
+  %receive
+    %{ reply, MessageId, Message, Terminated } ->
+      %log("received message ~b ~p", [MessageId, Message])
+  %end,
+
+  if
+    Lives > 0 ->
+      editor(Server, Lives - 1)
+  end.
+
+log(Format, Data) ->
+  logging("client.log", io_lib:format(Format ++ "~n", Data)).
