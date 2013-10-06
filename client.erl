@@ -47,10 +47,7 @@ spawn_client(Server, Config) ->
     message_delay = Config#config.message_delay
   },
   Client = spawn(fun() -> editor(Server, State) end),
-  timer:send_after(timer:seconds(Config#config.lifetime), Client, timeout).
-
-timeout() ->
-  log("Client ~p received timeout", [self()]).
+  erlang:send_after(timer:seconds(Config#config.lifetime), Client, timeout).
 
 editor(Server, State) ->
   Server ! {getmsgid, self()},
@@ -119,7 +116,7 @@ reader(Server, State) ->
   Server ! {getmessages, self()},
   receive
     {reply, MessageId, Message, false} ->
-      log("Client ~p received message ~b ~p", [self(), MessageId, Message]),
+      log("Client ~p received message ~b ~s", [self(), MessageId, Message]),
       reader(Server, State);
 
     {reply, _, _, true} ->
@@ -128,6 +125,10 @@ reader(Server, State) ->
 
     timeout -> timeout()
   end.
+
+timeout() ->
+  log("Client ~p received timeout", [self()]),
+  exit(kill).
 
 log(Format, Data) ->
   logging("client.log", io_lib:format(Format ++ "~n", Data)).

@@ -21,6 +21,7 @@ loop(State) ->
   receive
     {getmessages, Client} ->
       {Number, Nachricht} = lists:last(State#state.hold_back_queue),
+      timer:sleep(600),
       Client ! {reply, Number, Nachricht, false},
       loop(State);
     {getmsgid, Client} ->
