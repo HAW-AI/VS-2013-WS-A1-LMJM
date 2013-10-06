@@ -7,6 +7,9 @@
 -define(GROUP_NUMBER, 'bar').
 -define(TEAM_NUMBER, 'baz').
 
+-define(MESSAGES_BEFORE_CHANGING_DELAY, 5).
+-define(MESSAGES_BEFORE_STARTING_READER, 5).
+
 -record(config, {
   server_name,
   number_of_clients,
@@ -55,7 +58,7 @@ editor(Server, State) ->
     {nid, MessageId} ->
       NewState = editor_handle_message_id(Server, State, MessageId),
 
-      case NewState#state.messages_sent rem 5 of
+      case NewState#state.messages_sent rem ?MESSAGES_BEFORE_STARTING_READER of
         0 -> reader(Server, NewState);
         _ -> editor(Server, NewState)
       end;
@@ -92,7 +95,7 @@ update_massages_sent(State) ->
 
 update_message_delay(State) ->
   if
-    State#state.messages_sent > 5 ->
+    State#state.messages_sent > ?MESSAGES_BEFORE_CHANGING_DELAY ->
       NewMessageDelay = new_message_delay(State#state.message_delay),
       State#state{message_delay = NewMessageDelay};
     true -> State
