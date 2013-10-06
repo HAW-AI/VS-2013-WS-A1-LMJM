@@ -1,7 +1,11 @@
 -module(client).
 -export([start/1]).
 
--import(werkzeug, [logging/2]).
+-import(werkzeug, [logging/2, timeMilliSecond/0]).
+
+-define(COMPUTER_NAME, 'foo').
+-define(GROUP_NUMBER, 'bar').
+-define(TEAM_NUMBER, 'baz').
 
 -record(config, {
   server_name,
@@ -23,7 +27,7 @@ load_config() ->
   {ok, ConfigFile} = file:consult('client.cfg'),
   #config{
     server_name       = proplists:get_value(servername, ConfigFile),
-    number_of_clients = 1, % proplists:get_value(clients, ConfigFile),
+    number_of_clients = proplists:get_value(clients, ConfigFile),
     lifetime          = proplists:get_value(lifetime, ConfigFile),
     message_delay     = proplists:get_value(sendeintervall, ConfigFile)
   }.
@@ -40,9 +44,10 @@ spawn_client(Server, Config) ->
     message_delay = Config#config.message_delay
   },
   Client = spawn(fun() -> editor(Server, State) end),
-  receive after Config#config.lifetime * 1000 ->
-    Client ! timeout
-  end.
+  timer:send_after(timer:seconds(Config#config.lifetime), Client, timeout).
+
+timeout() ->
+  log("Client ~p received timeout", [self()]).
 
 editor(Server, State) ->
   Server ! {getmsgid, self()},
@@ -50,27 +55,37 @@ editor(Server, State) ->
     {nid, MessageId} ->
       NewState = editor_handle_message_id(Server, State, MessageId),
 
-      if
-        NewState#state.messages_sent =:= 5 -> reader(Server);
-        true -> true
-      end,
+      case NewState#state.messages_sent rem 5 of
+        0 -> reader(Server, NewState);
+        _ -> editor(Server, NewState)
+      end;
 
-      editor(Server, NewState);
-
-    timeout ->
-      log("~p timeout: terminating editor", [self()])
+    timeout -> timeout()
   end.
 
 editor_handle_message_id(Server, State, MessageId) ->
-  log("~p received MessageId ~b", [self(), MessageId]),
+  log("Client ~p received MessageId: ~b", [self(), MessageId]),
 
-  log("waiting for ~b seconds", [State#state.message_delay]),
-  timer:sleep(State#state.message_delay * 1000),
-  Server ! {dropmessage, {"My fancy Message", MessageId}},
+  log("Client ~p waiting for ~b seconds", [self(), State#state.message_delay]),
+  timer:sleep(timer:seconds(State#state.message_delay)),
+
+  Message = message(MessageId),
+  Server ! {dropmessage, {Message, MessageId}},
+  log("Client ~p sent message: ~s", [self(), Message]),
 
   TempState1 = update_massages_sent(State),
   TempState2 = update_message_delay(TempState1),
   TempState2.
+
+message(MessageId) ->
+  io_lib:format("~p@~p~p~p, ~bte Nachricht. ~p", [
+    self(),
+    ?COMPUTER_NAME,
+    ?GROUP_NUMBER,
+    ?TEAM_NUMBER,
+    MessageId,
+    timeMilliSecond()
+  ]).
 
 update_massages_sent(State) ->
   State#state{messages_sent = State#state.messages_sent + 1}.
@@ -78,7 +93,8 @@ update_massages_sent(State) ->
 update_message_delay(State) ->
   if
     State#state.messages_sent > 5 ->
-      State#state{message_delay = new_message_delay(State#state.message_delay)};
+      NewMessageDelay = new_message_delay(State#state.message_delay),
+      State#state{message_delay = NewMessageDelay};
     true -> State
   end.
 
@@ -91,16 +107,23 @@ new_message_delay(Delay) ->
   case random:uniform(2) of
     1 -> Delay + Increment;
     2 -> if
-      Delay - Increment < 2 -> 2;
+      (Delay - Increment) < 2 -> 2;
       true -> Delay - Increment
     end
   end.
 
-reader(Server) ->
+reader(Server, State) ->
   Server ! {getmessages, self()},
   receive
-    {reply, MessageId, Message, _Terminated} ->
-      log("~p Received message ~b ~p", [self(), MessageId, Message])
+    {reply, MessageId, Message, false} ->
+      log("Client ~p received message ~b ~p", [self(), MessageId, Message]),
+      reader(Server, State);
+
+    {reply, _, _, true} ->
+      log("Client ~p no messages: terminating reader", [self()]),
+      editor(Server, State);
+
+    timeout -> timeout()
   end.
 
 log(Format, Data) ->
