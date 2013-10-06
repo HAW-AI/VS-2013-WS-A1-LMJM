@@ -19,14 +19,14 @@ start() ->
 
 loop(State) ->
   receive
-    {getmessages, PID} ->
+    {getmessages, Client} ->
       {Number, Nachricht} = lists:last(State#state.hold_back_queue),
-      PID ! {reply, Number, Nachricht, false},
+      Client ! {reply, Number, Nachricht, false},
       loop(State);
-    {getmsgid, PID} ->
+    {getmsgid, Client} ->
       NewState = inc_message_id(State),
       log("Send id ~b", [NewState#state.current_msg_id]),
-      PID ! {nid, NewState#state.current_msg_id},
+      Client ! {nid, NewState#state.current_msg_id},
       loop(NewState);
     {dropmessage, {Message, Number}} ->
       NewState = put_message(Number, Message, State),
@@ -43,6 +43,3 @@ put_message(Number, Message, State) ->
 
 log(Format, Data) ->
   logging("server.log", io_lib:format(Format ++ "~n", Data)).
-
-log(Message) ->
-  logging("server.log", Message ++ "~n").
