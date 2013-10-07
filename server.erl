@@ -1,20 +1,21 @@
 -module(server).
 -export([start/0]).
 
+-define(READER_LIMIT, 1).
+
 -import(werkzeug, [logging/2, timeMilliSecond/0]).
 
 %TODO clients should be named as reader
 -record(state, {
   current_msg_id  = 0,
-  reader         = [],
+  clients         = [],
   hold_back_queue = [],
   delivery_queue  = []
 }).
 
 -record(reader, {
-  rpid,
   last_msg_id,
-  last_action
+  kill_timer
 }).
 
 
@@ -86,8 +87,7 @@ put_message(Number, Message, State) ->
 
 %% Ruft die für einen Reader die letzte ausgelieferte Nachrichten ID ab
 %% Gibt ein Tupel aus {NachrichtenID, State} zurück
-get_last_msg_id_for_reader(ReaderPid, State) ->
-  Reader = get_reader_by_pid(ReaderPid, State#state.reader),
+get_last_msg_id_for_reader(Reader, State) ->
   MsgId = if Reader#reader.last_msg_id > -1 ->
                 Reader#reader.last_msg_id;
              true -> get_min_msg_id(State#state.delivery_queue)
@@ -96,13 +96,20 @@ get_last_msg_id_for_reader(ReaderPid, State) ->
 
 %% Holt einen Reader Record anhand der ProcessID aus der ReaderList
 %% ist kein record da oder Zeitdiff zu groß wird ein neuer erstellt
-%% Zurückgegeben wird der neue Record
-get_reader_by_pid(RPid, ReaderList) ->
-  MatchedReader = [Reader || Reader <- ReaderList, Reader#reader.rpid =:= RPid].
-  %%TODO implement
-  %MatchedReader ==1 -> prüfe auf timestamp
-  %wenn aktTime - timestamp > Config.Zeitlimit oder MatchedReader.count == 0
-  % -> Neuen record erstellen
+%% Zurückgegeben wird ein Reader Record und der neue State
+get_reader_by_pid(Pid, State) ->
+  Reader = case lists:keyfind(Pid, 1, State#state.clients) of
+    false ->
+      #reader{
+        last_msg_id = get_min_msg_id(State#state.delivery_queue),
+        kill_timer = erlang:send_after(timer:seconds(?READER_LIMIT), self(), {forget_reader, Pid})
+      };
+    Result ->
+      erlang:cancel_timer(Result#reader.kill_timer),
+      Result#reader{kill_timer = erlang:send_after(timer:seconds(?READER_LIMIT), self(), {forget_reader, Pid})}
+  end,
+  NewState = State#state{clients = lists:keyreplace(Pid, 1, State#state.clients, {Pid, Reader})},
+  {Reader, NewState}.
 
 %% Gibt die kleinste MsgId aus der Queue zurück
 %%TODO implement

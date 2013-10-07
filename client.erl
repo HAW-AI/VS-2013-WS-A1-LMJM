@@ -8,7 +8,7 @@
 -define(TEAM_NUMBER, 'baz').
 
 -define(MESSAGES_BEFORE_CHANGING_DELAY, 5).
--define(MESSAGES_BEFORE_STARTING_READER, 5).
+-define(MESSAGES_BEFORE_STARTING_READER, 1).
 
 -record(config, {
   server_name,
@@ -113,7 +113,7 @@ new_message_delay(Delay) ->
   end.
 
 reader(Server, State) ->
-  Server ! {getmessages, self()},
+  Server ! {readertest, self()},
   receive
     {reply, MessageId, Message, false} ->
       log("Client ~p received message ~b ~s", [self(), MessageId, Message]),
