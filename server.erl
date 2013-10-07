@@ -19,21 +19,20 @@
 }).
 
 
-%% Functions Datenbank
-fdb() ->
+receive_handlers() ->
   [
     {getmessages, fun getmessages/2},
     {getmsgid, fun getmsgid/2},
     {dropmessage, fun dropmessage/2}
   ].
-fdb(Name) ->
-  proplists:get_value(Name, fdb(), fun(X) -> X end).
+receive_handler_for(Name) ->
+  proplists:get_value(Name, receive_handlers(), fun(X) -> X end).
 
 
 loop(State) ->
   receive
-    {FuncName, Param} ->
-      F = fdb(FuncName),
+    {Message, Param} ->
+      F = receive_handler_for(Message),
       NewState = F(State, Param),
       loop(NewState)
   end.
