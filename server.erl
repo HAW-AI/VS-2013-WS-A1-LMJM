@@ -30,15 +30,15 @@ loop(State) ->
       MsgId = get_last_msg_id_for_reader(Reader, State),
       Message = get_message_by_id(State#state.delivery_queue),
       MaxMsgId = get_max_msg_id(State#state.delivery_queue),
-      
+
       Terminate = if MaxMsgId > MsgId ->
                       false;
                      true -> true
                   end,
-      
+
       {Number, Nachricht} = lists:last(State#state.hold_back_queue),
       timer:sleep(600),
-      
+
       % Reader ! {reply, MsgId, Message, Terminate},
       Reader ! {reply, Number, Nachricht, false},
       loop(State);
@@ -71,7 +71,7 @@ get_last_msg_id_for_reader(ReaderPid, State) ->
              true -> get_min_msg_id(State#state.delivery_queue)
           end,
   {MsgId, State}.
-  
+
 %% Holt einen Reader Record anhand der ProcessID aus der ReaderList
 %% ist kein record da oder Zeitdiff zu groß wird ein neuer erstellt
 %% Zurückgegeben wird der neue Record
@@ -80,13 +80,13 @@ get_reader_by_pid(RPid, ReaderList) ->
   %%TODO implement
   %MatchedReader ==1 -> prüfe auf timestamp
   %wenn aktTime - timestamp > Config.Zeitlimit oder MatchedReader.count == 0
-  % -> Neuen record erstellen 
+  % -> Neuen record erstellen
 
 %% Gibt die kleinste MsgId aus der Queue zurück
 %%TODO implement
 get_min_msg_id(Queue) ->
   1.
-  
+
 %% Gibt die größte MsgId aus der Queue zurück
 %%TODO implement
 get_max_msg_id(Queue) ->
