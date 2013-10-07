@@ -17,41 +17,63 @@
   last_action
 }).
 
+
+%% Functions Datenbank
+fdb() ->
+  [
+    {getmessages, fun getmessages/2},
+    {getmsgid, fun getmsgid/2},
+    {dropmessage, fun dropmessage/2}
+  ].
+fdb(Name) ->
+  proplists:get_value(Name, fdb(), fun(X) -> X end).
+
+
+loop(State) ->
+  receive
+    {FuncName, Param} ->
+      F = fdb(FuncName),
+      NewState = F(State, Param),
+      loop(NewState)
+  end.
+
+
+
+getmessages(State, Reader) ->
+  MsgId = get_last_msg_id_for_reader(Reader, State),
+  Message = get_message_by_id(State#state.delivery_queue),
+  MaxMsgId = get_max_msg_id(State#state.delivery_queue),
+
+  Terminate = if MaxMsgId > MsgId ->
+                  false;
+                 true -> true
+              end,
+
+  {Number, Nachricht} = lists:last(State#state.hold_back_queue),
+  timer:sleep(600),
+
+  % Reader ! {reply, MsgId, Message, Terminate},
+  Reader ! {reply, Number, Nachricht, false},
+  State.
+
+
+getmsgid(State, Reader) ->
+  NewState = inc_message_id(State),
+  log("Send id ~b", [NewState#state.current_msg_id]),
+  Reader ! {nid, NewState#state.current_msg_id},
+  NewState.
+
+dropmessage(State, {Message, Number}) ->
+  NewState = put_message(Number, Message, State),
+  log("Got Message ~s", [Message]),
+  NewState.
+
 start() ->
   State = #state{},
   ServerPID = spawn(fun() -> loop(State) end),
   register(wk, ServerPID),
   log("Server started PID = ~p!", [ServerPID]),
   ServerPID.
-
-loop(State) ->
-  receive
-    {getmessages, Reader} ->
-      MsgId = get_last_msg_id_for_reader(Reader, State),
-      Message = get_message_by_id(State#state.delivery_queue),
-      MaxMsgId = get_max_msg_id(State#state.delivery_queue),
-
-      Terminate = if MaxMsgId > MsgId ->
-                      false;
-                     true -> true
-                  end,
-
-      {Number, Nachricht} = lists:last(State#state.hold_back_queue),
-      timer:sleep(600),
-
-      % Reader ! {reply, MsgId, Message, Terminate},
-      Reader ! {reply, Number, Nachricht, false},
-      loop(State);
-    {getmsgid, Reader} ->
-      NewState = inc_message_id(State),
-      log("Send id ~b", [NewState#state.current_msg_id]),
-      Reader ! {nid, NewState#state.current_msg_id},
-      loop(NewState);
-    {dropmessage, {Message, Number}} ->
-      NewState = put_message(Number, Message, State),
-      log("Got Message ~s", [Message]),
-      loop(NewState)
-  end.
 
 inc_message_id(State) ->
   State#state{current_msg_id = State#state.current_msg_id + 1}.
