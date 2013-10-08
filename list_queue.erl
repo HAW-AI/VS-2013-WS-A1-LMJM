@@ -33,8 +33,12 @@ replace_message_for_id(Queue, MsgId, NewMessage) ->
 
 %% Fügt eine Nachricht zur Queue hinzu
 add_message_to(Queue, MsgId, Message) ->
+  %log("Queue: ~w", [Queue]),
   Queue ++ [{MsgId, Message}].
 
 %% Löscht ein Element aus der Queue
 delete_message_from(Queue, MsgId) ->
   lists:keydelete(MsgId, 1, Queue).
+
+log(Format, Data) ->
+  logging("server.log", io_lib:format("Server: " ++ Format ++ "~n", Data)).

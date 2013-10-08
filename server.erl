@@ -164,8 +164,8 @@ copy_all_from_hold_back_queue_to_delivery_queue(State) ->
                            },
 
   State#state {
-                delivery_queue  = New_delivery_queue,
-                hold_back_queue = list_queue:add_message_to(New_hold_back_queue, Min_MsgId_HoldbackQueue-1, Error_Message)
+                delivery_queue  = list_queue:add_message_to(New_delivery_queue, Min_MsgId_HoldbackQueue-1, Error_Message),
+                hold_back_queue = New_hold_back_queue
               }.
 
 copy_message_from_hbq_to_dql(Delivery_queue, [], _, _) ->
@@ -177,15 +177,14 @@ copy_message_from_hbq_to_dql(Delivery_queue, Hold_back_queue, DLQ_Limit, Last_Ms
   Copy_Message = Temp_Message#message { time_at_delivery_queue = get_unix_timestamp() },
 
   %% abbrechen wenn erneute Luecke in Holdback Queue auftritt
-
-  case Copy_Message_Id = Last_MsgId + 1 of
+  case Copy_Message_Id =:= Last_MsgId + 1 of
     true ->
       case length(Delivery_queue) >= DLQ_Limit of
         true->
           Temp_delivery_queue = list_queue:replace_message_for_id(Delivery_queue, list_queue:get_min_msg_id(Delivery_queue), {Copy_Message_Id, Copy_Message}),
           copy_message_from_hbq_to_dql(Temp_delivery_queue, Temp_hold_back_queue, DLQ_Limit, Copy_Message_Id);
         false ->
-          Temp_delivery_queue = list_queue:add_message_to(delivery_queue, Copy_Message_Id, Copy_Message),
+          Temp_delivery_queue = list_queue:add_message_to(Delivery_queue, Copy_Message_Id, Copy_Message),
           copy_message_from_hbq_to_dql(Temp_delivery_queue, Temp_hold_back_queue, DLQ_Limit, Copy_Message_Id)
       end;
     false ->
