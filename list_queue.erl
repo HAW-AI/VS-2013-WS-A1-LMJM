@@ -9,7 +9,7 @@ get_min_msg_id(Queue) ->
           true ->
             {Id, _} = lists:min(Queue),
             Id;
-          false -> -1
+          false -> 0
         end,
   MsgId.
 
@@ -19,7 +19,7 @@ get_max_msg_id(Queue) ->
           true ->
             {Id, _} = lists:max(Queue),
             Id;
-          false -> -1
+          false -> 0
         end,
   MsgId.
 
@@ -33,12 +33,8 @@ replace_message_for_id(Queue, MsgId, NewMessage) ->
 
 %% Fügt eine Nachricht zur Queue hinzu
 add_message_to(Queue, MsgId, Message) ->
-  log("Hier bin ich noch ~s", ["_"]),
   Queue ++ [{MsgId, Message}].
 
 %% Löscht ein Element aus der Queue
 delete_message_from(Queue, MsgId) ->
   lists:keydelete(MsgId, 1, Queue).
-
-log(Format, Data) ->
-  logging("server.log", io_lib:format(Format ++ "~n", Data)).

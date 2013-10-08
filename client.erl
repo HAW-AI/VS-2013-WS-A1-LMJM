@@ -8,7 +8,7 @@
 -define(TEAM_NUMBER, 'baz').
 
 -define(MESSAGES_BEFORE_CHANGING_DELAY, 5).
--define(MESSAGES_BEFORE_STARTING_READER, 1).
+-define(MESSAGES_BEFORE_STARTING_READER, 3).
 
 -record(config, {
   server_name,
