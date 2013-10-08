@@ -45,9 +45,9 @@ load_config() ->
 receive_handlers() ->
   [
     {getmessages, fun getmessages/2},
-    {readertest, fun getmessages/2},
     {getmsgid, fun getmsgid/2},
-    {dropmessage, fun dropmessage/2}
+    {dropmessage, fun dropmessage/2},
+    {forget_reader, fun forget_reader/2}
   ].
 receive_handler_for(Name) ->
   proplists:get_value(Name, receive_handlers(), fun(X, _) -> X end).
@@ -63,7 +63,7 @@ start() ->
 loop(State) ->
   receive
     {Message, Param} ->
-      log("Remote Procedure Call: ~s", [Message]),
+      log("Received Message: ~s", [Message]),
       F = receive_handler_for(Message),
       NewState = F(State, Param),
       loop(NewState);
@@ -205,23 +205,27 @@ get_last_msg_id_for_reader(Reader, State) ->
       list_queue:get_min_msg_id(State#state.delivery_queue)
   end.
 
-%% Holt einen Reader Record anhand der ProcessID aus der ReaderList
-%% ist kein record da oder Zeitdiff zu groß wird ein neuer erstellt
-%% Zurückgegeben wird ein Reader Record und der neue State
+forget_reader(State, Pid) ->
+  State#state{clients = lists:keydelete(Pid, 1, State#state.clients)}.
+
 get_reader_by_pid(Pid, State) ->
-  Reader = case lists:keyfind(Pid, 1, State#state.clients) of
+  KillTimer = erlang:send_after(
+    timer:seconds(State#state.config#config.client_lifetime),
+    self(),
+    {forget_reader, Pid}
+  ),
+  NewReader = case lists:keyfind(Pid, 1, State#state.clients) of
     false ->
       #reader{
         last_msg_id = list_queue:get_min_msg_id(State#state.delivery_queue),
-        kill_timer = erlang:send_after(timer:seconds(State#state.config#config.client_lifetime), self(), {forget_reader, Pid})
+        kill_timer = KillTimer
       };
-    Result ->
-      erlang:cancel_timer(Result#reader.kill_timer),
-      Result#reader{kill_timer = erlang:send_after(timer:seconds(State#state.config#config.client_lifetime), self(), {forget_reader, Pid})}
+    {Pid, Reader} ->
+      erlang:cancel_timer(Reader#reader.kill_timer),
+      Reader#reader{kill_timer = KillTimer}
   end,
-  NewState = State#state{clients = lists:keyreplace(Pid, 1, State#state.clients, {Pid, Reader})},
-  {Reader, NewState}.
-
+  NewState = State#state{clients = lists:keystore(Pid, 1, State#state.clients, {Pid, NewReader})},
+  {NewReader, NewState}.
 
 get_unix_timestamp() ->
   {Mega, Secs, _} = now(),
