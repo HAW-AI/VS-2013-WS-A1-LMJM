@@ -1,5 +1,6 @@
 #!/usr/bin/env escript
 
+-compile(list_queue).
 -compile(server).
 -compile(client).
 

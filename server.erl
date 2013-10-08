@@ -4,8 +4,8 @@
 -define(READER_LIMIT, 1).
 
 -import(werkzeug, [logging/2, timeMilliSecond/0]).
+-import(list_queue, [get_min_msg_id/1, get_max_msg_id/1, get_message_by_id/2, replace_message_for_id/3, add_message_to/3, delete_message_from/2]).
 
-%TODO clients should be named as reader
 -record(state, {
   current_msg_id  = 0,
   clients         = [],
@@ -18,6 +18,12 @@
   kill_timer
 }).
 
+-record(message,{
+  msg,
+  time_at_hold_back_queue,
+  time_at_delivery_queue
+}).
+
 
 receive_handlers() ->
   [
@@ -26,8 +32,15 @@ receive_handlers() ->
     {dropmessage, fun dropmessage/2}
   ].
 receive_handler_for(Name) ->
-  proplists:get_value(Name, receive_handlers(), fun(X) -> X end).
+  proplists:get_value(Name, receive_handlers(), fun(X, _) -> X end).
 
+
+start() ->
+  State = #state{},
+  ServerPID = spawn(fun() -> loop(State) end),
+  register(wk, ServerPID),
+  log("Server started PID = ~p!", [ServerPID]),
+  ServerPID.
 
 loop(State) ->
   receive
@@ -40,22 +53,20 @@ loop(State) ->
 
 
 getmessages(State, Reader) ->
-  MsgId = get_last_msg_id_for_reader(Reader, State),
-  Message = get_message_by_id(State#state.delivery_queue),
-  MaxMsgId = get_max_msg_id(State#state.delivery_queue),
+  MsgId = list_queue:get_last_msg_id_for_reader(Reader, State),
+  Message = list_queue:get_message_by_id(State#state.delivery_queue, MsgId),
+  MaxMsgId = list_queue:get_max_msg_id(State#state.delivery_queue),
 
-  Terminate = if MaxMsgId > MsgId ->
-                  false;
+  Terminate = if MaxMsgId > MsgId -> false;
                  true -> true
               end,
 
   {Number, Nachricht} = lists:last(State#state.hold_back_queue),
   timer:sleep(600),
 
-  % Reader ! {reply, MsgId, Message, Terminate},
+  % Reader ! {reply, MsgId, Message#message.msg, Terminate},
   Reader ! {reply, Number, Nachricht, false},
   State.
-
 
 getmsgid(State, Reader) ->
   NewState = inc_message_id(State),
@@ -68,28 +79,22 @@ dropmessage(State, {Message, Number}) ->
   log("Got Message ~s", [Message]),
   NewState.
 
-start() ->
-  State = #state{},
-  ServerPID = spawn(fun() -> loop(State) end),
-  register(wk, ServerPID),
-  log("Server started PID = ~p!", [ServerPID]),
-  ServerPID.
+
 
 inc_message_id(State) ->
   State#state{current_msg_id = State#state.current_msg_id + 1}.
 
 %% Fügt eine Nachricht in die Holdback-Queue ein
 %% Gibt den State zurück
-%%TODO Timestamp setzen
 put_message(Number, Message, State) ->
-  State#state{hold_back_queue = State#state.hold_back_queue ++ [{Number, Message}]}.
+  State#state{hold_back_queue = list_queue:add_message_to(State#state.hold_back_queue, Number, #message{msg=Message, time_at_hold_back_queue=get_unix_timestamp()})}.
 
 %% Ruft die für einen Reader die letzte ausgelieferte Nachrichten ID ab
 %% Gibt ein Tupel aus {NachrichtenID, State} zurück
 get_last_msg_id_for_reader(Reader, State) ->
   MsgId = if Reader#reader.last_msg_id > -1 ->
                 Reader#reader.last_msg_id;
-             true -> get_min_msg_id(State#state.delivery_queue)
+             true -> list_queue:get_min_msg_id(State#state.delivery_queue)
           end,
   {MsgId, State}.
 
@@ -110,20 +115,11 @@ get_reader_by_pid(Pid, State) ->
   NewState = State#state{clients = lists:keyreplace(Pid, 1, State#state.clients, {Pid, Reader})},
   {Reader, NewState}.
 
-%% Gibt die kleinste MsgId aus der Queue zurück
-%%TODO implement
-get_min_msg_id(Queue) ->
-  1.
 
-%% Gibt die größte MsgId aus der Queue zurück
-%%TODO implement
-get_max_msg_id(Queue) ->
-  1.
+get_unix_timestamp() ->
+  {Mega, Secs, _} = now(),
+  Mega*1000000 + Secs.
 
-%% Holt eine Nachricht angand ihrer ID aus der Queue
-%%TODO implement
-get_message_by_id(Queue) ->
-  nothing.
 
 log(Format, Data) ->
   logging("server.log", io_lib:format(Format ++ "~n", Data)).

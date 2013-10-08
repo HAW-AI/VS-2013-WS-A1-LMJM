@@ -1,4 +1,4 @@
 #!/bin/sh
 
-erlc werkzeug.erl server.erl client.erl
+erlc werkzeug.erl list_queue.erl server.erl client.erl
 ./bin/main
