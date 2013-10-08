@@ -10,7 +10,8 @@
   current_msg_id  = 0,
   clients         = [],
   hold_back_queue = [],
-  delivery_queue  = []
+  delivery_queue  = [],
+  config
 }).
 
 -record(reader, {
@@ -24,6 +25,21 @@
   time_at_delivery_queue
 }).
 
+-record(config,{
+  server_lifetime,
+  client_lifetime,
+  server_name,
+  delivery_queue_limit
+}).
+
+load_config() ->
+  {ok, ConfigFile} = file:consult('server.cfg'),
+  #config{
+    server_lifetime       = proplists:get_value(serverlifetime, ConfigFile),
+    client_lifetime       = proplists:get_value(clientlifetime, ConfigFile),
+    server_name           = proplists:get_value(servername, ConfigFile),
+    delivery_queue_limit  = proplists:get_value(dlqlimit, ConfigFile)
+  }.
 
 receive_handlers() ->
   [
@@ -37,9 +53,10 @@ receive_handler_for(Name) ->
 
 
 start() ->
-  State = #state{},
+  Config = load_config(),
+  State = #state{ config = Config },
   ServerPID = spawn(fun() -> loop(State) end),
-  register(wk, ServerPID),
+  register(Config#config.server_name, ServerPID),
   log("Server started PID = ~p!", [ServerPID]),
   ServerPID.
 
@@ -75,7 +92,7 @@ getmessages(State, ReaderPid) ->
 
   case Message =:= {nok, MsgId} of
     true ->
-      ReaderPid ! {reply, -1, 'dummy', true};
+      ReaderPid ! {reply, MsgId, 'dummy', true};
     false ->
       ReaderPid ! {reply, MsgId, Message#message.msg, Terminate}
   end,
@@ -122,11 +139,11 @@ get_reader_by_pid(Pid, State) ->
     false ->
       #reader{
         last_msg_id = list_queue:get_min_msg_id(State#state.delivery_queue),
-        kill_timer = erlang:send_after(timer:seconds(?READER_LIMIT), self(), {forget_reader, Pid})
+        kill_timer = erlang:send_after(timer:seconds(State#state.config#config.client_lifetime), self(), {forget_reader, Pid})
       };
     Result ->
       erlang:cancel_timer(Result#reader.kill_timer),
-      Result#reader{kill_timer = erlang:send_after(timer:seconds(?READER_LIMIT), self(), {forget_reader, Pid})}
+      Result#reader{kill_timer = erlang:send_after(timer:seconds(State#state.config#config.client_lifetime), self(), {forget_reader, Pid})}
   end,
   NewState = State#state{clients = lists:keyreplace(Pid, 1, State#state.clients, {Pid, Reader})},
   {Reader, NewState}.
