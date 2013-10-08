@@ -4,7 +4,7 @@
 -define(READER_LIMIT, 1).
 -define(VERBOSE, true).
 
--import(werkzeug, [logging/2, timeMilliSecond/0]).
+-import(werkzeug, [logging/2]).
 -import(list_queue, [get_min_msg_id/1, get_max_msg_id/1, get_message_by_id/2, replace_message_for_id/3, add_message_to/3, delete_message_from/2]).
 
 -record(state, {
