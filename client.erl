@@ -8,7 +8,8 @@
 -define(TEAM_NUMBER, 'baz').
 
 -define(MESSAGES_BEFORE_CHANGING_DELAY, 5).
--define(MESSAGES_BEFORE_STARTING_READER, 3).
+-define(MESSAGES_BEFORE_STARTING_READER, 5).
+-define(MESSAGES_BEFORE_FORGETTING_ONE, 5).
 
 -record(config, {
   server_name,
@@ -69,9 +70,14 @@ editor_handle_message_id(Server, State, MessageId) ->
   log("Client ~p waiting for ~b seconds", [self(), State#state.message_delay]),
   timer:sleep(timer:seconds(State#state.message_delay)),
 
-  Message = message(MessageId),
-  Server ! {dropmessage, {Message, MessageId}},
-  log("Client ~p sent message: ~s", [self(), Message]),
+  case State#state.messages_sent =:= ?MESSAGES_BEFORE_FORGETTING_ONE of
+    true ->
+      log("Client ~p forgot to send message ~b", [self(), MessageId]);
+    false ->
+      Message = message(MessageId),
+      Server ! {dropmessage, {Message, MessageId}},
+      log("Client ~p sent message: ~s", [self(), Message])
+  end,
 
   TempState1 = update_massages_sent(State),
   TempState2 = update_message_delay(TempState1),

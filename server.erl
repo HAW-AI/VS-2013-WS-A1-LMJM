@@ -206,6 +206,7 @@ get_last_msg_id_for_reader(Reader, State) ->
   end.
 
 forget_reader(State, Pid) ->
+  log("forgetting client ~p", [Pid]),
   State#state{clients = lists:keydelete(Pid, 1, State#state.clients)}.
 
 get_reader_by_pid(Pid, State) ->
