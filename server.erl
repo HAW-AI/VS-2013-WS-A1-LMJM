@@ -28,6 +28,7 @@
 receive_handlers() ->
   [
     {getmessages, fun getmessages/2},
+    {readertest, fun getmessages/2},
     {getmsgid, fun getmsgid/2},
     {dropmessage, fun dropmessage/2}
   ].
@@ -45,28 +46,40 @@ start() ->
 loop(State) ->
   receive
     {Message, Param} ->
+      log("Remote Procedure Call: ~s", [Message]),
       F = receive_handler_for(Message),
       NewState = F(State, Param),
-      loop(NewState)
+      loop(NewState);
+    {Unknown} ->
+      log("Unknown message received: ~s", [Unknown]);
+    {Unknown,_,_} ->
+      log("Unknown message received: ~s", [Unknown])
   end.
 
 
 
-getmessages(State, Reader) ->
-  MsgId = list_queue:get_last_msg_id_for_reader(Reader, State),
-  Message = list_queue:get_message_by_id(State#state.delivery_queue, MsgId),
-  MaxMsgId = list_queue:get_max_msg_id(State#state.delivery_queue),
+getmessages(State, ReaderPid) ->
+  %% Reader Record laden oder neuen Reader registrieren
+  {Reader, NewState} = get_reader_by_pid(ReaderPid, State),
+
+  MsgId = get_last_msg_id_for_reader(Reader, NewState),
+  Message = list_queue:get_message_by_id(NewState#state.delivery_queue, MsgId),
+  MaxMsgId = list_queue:get_max_msg_id(NewState#state.delivery_queue),
 
   Terminate = if MaxMsgId > MsgId -> false;
                  true -> true
               end,
 
-  {Number, Nachricht} = lists:last(State#state.hold_back_queue),
+  %{Number, Nachricht} = lists:last(NewState#state.hold_back_queue),
   timer:sleep(600),
 
-  % Reader ! {reply, MsgId, Message#message.msg, Terminate},
-  Reader ! {reply, Number, Nachricht, false},
-  State.
+  case Message =:= {nok, MsgId} of
+    true ->
+      ReaderPid ! {reply, -1, 'dummy', true};
+    false ->
+      ReaderPid ! {reply, MsgId, Message#message.msg, Terminate}
+  end,
+  NewState.
 
 getmsgid(State, Reader) ->
   NewState = inc_message_id(State),
@@ -87,7 +100,10 @@ inc_message_id(State) ->
 %% Fügt eine Nachricht in die Holdback-Queue ein
 %% Gibt den State zurück
 put_message(Number, Message, State) ->
-  State#state{hold_back_queue = list_queue:add_message_to(State#state.hold_back_queue, Number, #message{msg=Message, time_at_hold_back_queue=get_unix_timestamp()})}.
+  Timestamp = get_unix_timestamp(),
+  MsgRec = #message{msg=Message, time_at_hold_back_queue=Timestamp},
+
+  State#state{hold_back_queue = list_queue:add_message_to(State#state.hold_back_queue, Number, MsgRec)}.
 
 %% Ruft die für einen Reader die letzte ausgelieferte Nachrichten ID ab
 %% Gibt ein Tupel aus {NachrichtenID, State} zurück
@@ -105,7 +121,7 @@ get_reader_by_pid(Pid, State) ->
   Reader = case lists:keyfind(Pid, 1, State#state.clients) of
     false ->
       #reader{
-        last_msg_id = get_min_msg_id(State#state.delivery_queue),
+        last_msg_id = list_queue:get_min_msg_id(State#state.delivery_queue),
         kill_timer = erlang:send_after(timer:seconds(?READER_LIMIT), self(), {forget_reader, Pid})
       };
     Result ->
@@ -119,7 +135,6 @@ get_reader_by_pid(Pid, State) ->
 get_unix_timestamp() ->
   {Mega, Secs, _} = now(),
   Mega*1000000 + Secs.
-
 
 log(Format, Data) ->
   logging("server.log", io_lib:format(Format ++ "~n", Data)).
