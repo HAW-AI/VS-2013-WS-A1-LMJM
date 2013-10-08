@@ -113,14 +113,15 @@ new_message_delay(Delay) ->
   end.
 
 reader(Server, State) ->
-  Server ! {readertest, self()},
+  Server ! {getmessages, self()},
   receive
     {reply, MessageId, Message, false} ->
       log("Client ~p received message ~b ~s", [self(), MessageId, Message]),
       reader(Server, State);
 
-    {reply, _, _, true} ->
-      log("Client ~p no messages: terminating reader", [self()]),
+    {reply, MessageId, Message, true} ->
+      log("Client ~p received message ~b ~s", [self(), MessageId, Message]),
+      log("Client ~p no more messages: terminating reader", [self()]),
       editor(Server, State);
 
     timeout -> timeout()
