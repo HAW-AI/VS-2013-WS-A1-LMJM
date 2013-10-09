@@ -29,7 +29,7 @@ get_message_by_id(Queue,MsgId) ->
 
 %% Ersetzt eine Nachricht in der Queue
 replace_message_for_id(Queue, MsgId, NewMessage) ->
-  lists:keyreplace(MsgId, 1, Queue, {MsgId, NewMessage}).
+  lists:keyreplace(MsgId, 1, Queue, NewMessage).
 
 %% Fügt eine Nachricht zur Queue hinzu
 add_message_to(Queue, MsgId, Message) ->

@@ -131,7 +131,16 @@ put_message(MsgId, Message, State) ->
   NewState = case Max_MsgId_DeliveryQueue =:= MsgId - 1 of
                true ->
                  MsgRec = #message{msg=Message, time_at_delivery_queue=Timestamp},
-                 State#state{delivery_queue = list_queue:add_message_to(State#state.delivery_queue, MsgId, MsgRec)};
+                 case length(State#state.delivery_queue) =:= State#state.config#config.delivery_queue_limit of
+                   true ->
+                     State#state{delivery_queue = list_queue:add_message_to(
+                                                    State#state.delivery_queue,
+                                                    list_queue:get_min_msg_id(State#state.delivery_queue),
+                                                    {MsgId, MsgRec}
+                                                   )};
+                   false ->
+                     State#state{delivery_queue = list_queue:add_message_to(State#state.delivery_queue, MsgId, MsgRec)}
+                 end;
                false ->
                  MsgRec = #message{msg=Message, time_at_hold_back_queue=Timestamp},
                  State#state{hold_back_queue = list_queue:add_message_to(State#state.hold_back_queue, MsgId, MsgRec)}
