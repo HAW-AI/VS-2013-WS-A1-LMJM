@@ -165,7 +165,13 @@ copy_all_from_hold_back_queue_to_delivery_queue(State) ->
   Delivery_queue_limit    = State#state.config#config.delivery_queue_limit,
 
   %% Recursieves Kopieren starten (Min_MsgId_HoldbackQueue - 1 als startwert -> für erneute Lückenerkennung)
-  {New_delivery_queue, New_hold_back_queue} = copy_message_from_hbq_to_dql(Delivery_queue, Hold_back_queue, Delivery_queue_limit, Min_MsgId_HoldbackQueue-1),
+  {New_delivery_queue, New_hold_back_queue, LogString} = copy_message_from_hbq_to_dql(Delivery_queue, Hold_back_queue, Delivery_queue_limit, Min_MsgId_HoldbackQueue-1, ""),
+
+  New_Max_delivery_queue = list_queue:get_max_msg_id(New_delivery_queue),
+  Count_copy_messages = New_Max_delivery_queue - Min_MsgId_HoldbackQueue,
+
+  log("COPY ~b messages [von ~b bis ~b]", [Count_copy_messages, Min_MsgId_HoldbackQueue, New_Max_delivery_queue]),
+  log("~s", [LogString]),
 
   Error_Message = #message {
                             msg = io_lib:format("Fehlernachricht fuer Nachrichten ~b bis ~b", [Max_MsgId_DeliveryQueue+1, Min_MsgId_HoldbackQueue-1]),
@@ -177,9 +183,9 @@ copy_all_from_hold_back_queue_to_delivery_queue(State) ->
                 hold_back_queue = New_hold_back_queue
               }.
 
-copy_message_from_hbq_to_dql(Delivery_queue, [], _, _) ->
-  {Delivery_queue, []};
-copy_message_from_hbq_to_dql(Delivery_queue, Hold_back_queue, DLQ_Limit, Last_MsgId) ->
+copy_message_from_hbq_to_dql(Delivery_queue, [], _, _, LogString) ->
+  {Delivery_queue, [], LogString};
+copy_message_from_hbq_to_dql(Delivery_queue, Hold_back_queue, DLQ_Limit, Last_MsgId, LogString) ->
   Copy_Message_Id       = get_min_msg_id(Hold_back_queue),
   Temp_Message          = list_queue:get_message_by_id(Hold_back_queue, Copy_Message_Id),
   Temp_hold_back_queue  = list_queue:delete_message_from(Hold_back_queue, Copy_Message_Id),
@@ -188,17 +194,20 @@ copy_message_from_hbq_to_dql(Delivery_queue, Hold_back_queue, DLQ_Limit, Last_Ms
   %% abbrechen wenn erneute Luecke in Holdback Queue auftritt
   case Copy_Message_Id =:= Last_MsgId + 1 of
     true ->
+
+      NewLogString = LogString ++ io_lib:format("ID=~b - Message=~s at ~b", [Copy_Message_Id, Copy_Message#message.msg, Copy_Message#message.time_at_delivery_queue]),
+
       case length(Delivery_queue) >= DLQ_Limit of
         true->
           Temp_delivery_queue = list_queue:replace_message_for_id(Delivery_queue, list_queue:get_min_msg_id(Delivery_queue), {Copy_Message_Id, Copy_Message}),
-          copy_message_from_hbq_to_dql(Temp_delivery_queue, Temp_hold_back_queue, DLQ_Limit, Copy_Message_Id);
+          copy_message_from_hbq_to_dql(Temp_delivery_queue, Temp_hold_back_queue, DLQ_Limit, Copy_Message_Id, NewLogString);
         false ->
           Temp_delivery_queue = list_queue:add_message_to(Delivery_queue, Copy_Message_Id, Copy_Message),
-          copy_message_from_hbq_to_dql(Temp_delivery_queue, Temp_hold_back_queue, DLQ_Limit, Copy_Message_Id)
+          copy_message_from_hbq_to_dql(Temp_delivery_queue, Temp_hold_back_queue, DLQ_Limit, Copy_Message_Id, NewLogString)
       end;
     false ->
       %% Wieder eine Luecke
-      {Delivery_queue, Hold_back_queue}
+      {Delivery_queue, Hold_back_queue, LogString}
   end.
 
 
