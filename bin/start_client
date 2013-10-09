@@ -1,0 +1,7 @@
+#!/usr/bin/env escript
+%%! -sname client -setcookie jenzelrockt
+
+-compile(client).
+
+main(_) ->
+  client:start(), io:fread("", "~c").

@@ -1,0 +1,7 @@
+#!/usr/bin/env escript
+%%! -sname server -setcookie jenzelrockt
+
+-compile(server).
+
+main(_) ->
+  server:start(), io:fread("", "~c").

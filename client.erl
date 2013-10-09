@@ -14,13 +14,15 @@
 -record(config, {
   server_name,
   number_of_clients,
-  lifetime,
+  kill_timeout,
   message_delay
 }).
 
 -record(state, {
   messages_sent,
-  message_delay
+  message_delay,
+  kill_timeout,
+  kill_timer
 }).
 
 start(Server) ->
@@ -32,7 +34,7 @@ load_config() ->
   #config{
     server_name       = proplists:get_value(servername, ConfigFile),
     number_of_clients = proplists:get_value(clients, ConfigFile),
-    lifetime          = proplists:get_value(lifetime, ConfigFile),
+    kill_timeout      = proplists:get_value(lifetime, ConfigFile),
     message_delay     = proplists:get_value(sendeintervall, ConfigFile)
   }.
 
@@ -43,18 +45,25 @@ spawn_clients(Server, Config) ->
   ).
 
 spawn_client(Server, Config) ->
-  State = #state{
-    messages_sent = 0,
-    message_delay = Config#config.message_delay
-  },
-  Client = spawn(fun() -> editor(Server, State) end),
-  erlang:send_after(timer:seconds(Config#config.lifetime), Client, timeout).
+  spawn(fun() ->
+    State = #state{
+      messages_sent = 0,
+      message_delay = Config#config.message_delay,
+      kill_timeout = Config#config.kill_timeout,
+      kill_timer = erlang:send_after(
+        timer:seconds(Config#config.kill_timeout),
+        self(), timeout
+      )
+    },
+    editor(Server, State)
+  end).
 
 editor(Server, State) ->
   Server ! {getmsgid, self()},
   receive
     {nid, MessageId} ->
-      NewState = editor_handle_message_id(Server, State, MessageId),
+      TimerState = editor_reset_timer(State),
+      NewState = editor_handle_message_id(Server, TimerState, MessageId),
 
       case NewState#state.messages_sent rem ?MESSAGES_BEFORE_STARTING_READER of
         0 -> reader(Server, NewState);
@@ -63,6 +72,14 @@ editor(Server, State) ->
 
     timeout -> timeout()
   end.
+
+editor_reset_timer(State) ->
+  erlang:cancel_timer(State#state.kill_timer),
+  State#state{
+    kill_timer = erlang:send_after(
+      timer:seconds(State#state.kill_timeout),
+      self(), timeout)
+  }.
 
 editor_handle_message_id(Server, State, MessageId) ->
   log("Client ~p received MessageId: ~b", [self(), MessageId]),
@@ -110,6 +127,7 @@ new_message_delay(Delay) ->
     _ -> Delay div 2
   end,
 
+  random:seed(now()),
   case random:uniform(2) of
     1 -> Delay + Increment;
     2 -> if
