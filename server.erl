@@ -91,7 +91,7 @@ getmessages(State, ReaderPid) ->
               end,
 
   %{Number, Nachricht} = lists:last(NewState#state.hold_back_queue),
-  timer:sleep(600),
+  timer:sleep(timer:seconds(2)),
 
   case Message =:= {nok, MsgId} of
     true ->

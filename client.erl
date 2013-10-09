@@ -70,10 +70,10 @@ editor_handle_message_id(Server, State, MessageId) ->
   log("Client ~p waiting for ~b seconds", [self(), State#state.message_delay]),
   timer:sleep(timer:seconds(State#state.message_delay)),
 
-  case State#state.messages_sent =:= ?MESSAGES_BEFORE_FORGETTING_ONE of
-    true ->
+  case State#state.messages_sent rem ?MESSAGES_BEFORE_FORGETTING_ONE of
+    0 ->
       log("Client ~p forgot to send message ~b", [self(), MessageId]);
-    false ->
+    _ ->
       Message = message(MessageId),
       Server ! {dropmessage, {Message, MessageId}},
       log("Client ~p sent message: ~s", [self(), Message])
